@@ -1111,18 +1111,20 @@
 
   /* ---------- planes con IA ---------- */
   var LS_CLAVE = 'suelta.apikey';
-  var PROMPT_PLAN = 'Eres parte de Suelta, una app donde el usuario vuelca pensamientos rumiantes ' +
-    '(trabajo, carrera, decisiones de vida) para poder soltarlos. Recibirás un pensamiento tal cual ' +
-    'fue volcado, a menudo dictado y sin pulir. Devuelve cuatro campos: ' +
+  var PROMPT_PLAN = 'Eres parte de Suelta, un cuaderno personal donde el usuario vuelca pensamientos ' +
+    '(trabajo, salud, decisiones de vida…) para verlos con claridad y poder soltarlos. Recibirás un ' +
+    'pensamiento tal cual fue volcado, a menudo dictado y sin pulir. Devuelve estos campos: ' +
     '(0) "texto": el pensamiento pasado a limpio — añade mayúsculas, comas, puntos y signos de ' +
     'interrogación y exclamación (con apertura ¿ ¡), y corrige tildes que falten. PROHIBIDO ' +
     'cambiar, añadir, quitar o reordenar palabras: solo ortografía y puntuación. ' +
     '(1) "reflejo": qué está pensando o sintiendo de verdad el usuario debajo de lo que dice, ' +
     'reformulado con claridad y calidez, máximo 2 frases. ' +
-    '(2) "mecanismo": el fundamento psicológico de por qué su cabeza hace esto (p. ej. rumiación ' +
-    'ante una decisión sin fecha, intolerancia a la incertidumbre, catastrofización, bucles ' +
-    'abiertos que la mente no suelta), en lenguaje llano de divulgación; nunca jerga clínica ni ' +
-    'diagnósticos sobre la persona, máximo 2 frases. ' +
+    '(2) "mecanismo": el proceso mental que mejor explica lo que hace su cabeza con ESTE texto ' +
+    'concreto — identifícalo a partir de lo que dice, sin asumir un patrón por defecto: puede ser ' +
+    'preocupación fundada ante un problema real, incertidumbre, autoexigencia, anticipación, ' +
+    'comparación, cansancio, ilusión, duelo, o sí, a veces un bucle que se repite sin avanzar. ' +
+    'Si es una reacción proporcionada a una situación real, dilo así, sin patologizar. Lenguaje ' +
+    'llano de divulgación; nunca jerga clínica ni diagnósticos sobre la persona, máximo 2 frases. ' +
     '(3) "paso": UN único siguiente paso pequeño y concreto que desatasque, máximo 2 frases; si es ' +
     'una decisión grande, un paso de proceso (p. ej. "Apunta los 3 criterios que de verdad importan ' +
     'y ponle una fecha para decidir con lo que haya"); si es puro desahogo sin acción posible, dilo ' +
