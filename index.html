@@ -739,12 +739,12 @@
       <h2>Planes con IA</h2>
     </div>
     <p class="small">
-      Con una clave de API de Anthropic, la app puede proponer <strong>un siguiente paso</strong>
+      Con una clave de API de OpenAI, la app puede proponer <strong>un siguiente paso</strong>
       para cada pensamiento. La clave se guarda solo en este navegador y tus pensamientos van
-      directos de tu navegador a Anthropic — sin servidores intermedios.
+      directos de tu navegador a OpenAI — sin servidores intermedios.
     </p>
     <div class="fila-clave">
-      <input type="password" id="inputClave" placeholder="sk-ant-..." autocomplete="off" aria-label="Clave de API de Anthropic">
+      <input type="password" id="inputClave" placeholder="sk-..." autocomplete="off" aria-label="Clave de API de OpenAI">
       <button class="btn-sec" id="btnGuardarClave">Guardar</button>
     </div>
     <p class="small" id="estadoClave"></p>
@@ -919,19 +919,20 @@
   }
 
   function llamarPlan(pensamiento) {
-    return fetch('https://api.anthropic.com/v1/messages', {
+    return fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-api-key': obtenerClave(),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
+        'authorization': 'Bearer ' + obtenerClave()
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-8',
-        max_tokens: 300,
-        system: PROMPT_PLAN,
-        messages: [{ role: 'user', content: pensamiento }]
+        model: 'gpt-5-mini',
+        max_completion_tokens: 1000,
+        reasoning_effort: 'minimal',
+        messages: [
+          { role: 'system', content: PROMPT_PLAN },
+          { role: 'user', content: pensamiento }
+        ]
       })
     }).then(function (r) {
       if (!r.ok) {
@@ -941,9 +942,8 @@
       }
       return r.json();
     }).then(function (data) {
-      var t = '';
-      (data.content || []).forEach(function (b) { if (b.type === 'text') t += b.text; });
-      t = t.trim();
+      var t = (data.choices && data.choices[0] && data.choices[0].message &&
+               data.choices[0].message.content || '').trim();
       if (!t) throw { code: 'vacio' };
       return t;
     });
