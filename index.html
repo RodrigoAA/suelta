@@ -769,7 +769,7 @@
   <p class="esc-palabras" id="escPalabras">El texto no se muestra: habla sin filtro.</p>
   <div class="esc-acciones">
     <button class="btn-sec" id="escCancelar">Cancelar</button>
-    <button class="btn-soltar" id="escListo">Listo</button>
+    <button class="btn-soltar" id="escListo">Soltar</button>
   </div>
 </div>
 
@@ -871,32 +871,46 @@
     texto.value = '';
     texto.blur();
     pintarBadge();
-    mostrarVelo(!!conPlan);
+    mostrarVelo(!!conPlan, false);
     if (window.SpeechRecognition || window.webkitSpeechRecognition) mostrarReposo();
-    if (conPlan) pedirPlan(pensamiento);
+    if (conPlan) pedirPlan(pensamiento, Date.now() + 2600);
   }
   btnSoltar.addEventListener('click', function () { soltar(false); });
   $('btnSoltarPlan').addEventListener('click', function () { soltar(true); });
 
-  var veloTimer = null;
+  var veloTimer = null, etapasTimer = null;
   var veloPeque = $('veloPeque'), veloPlan = $('veloPlan'), veloToca = $('veloToca');
-  function mostrarVelo(conPlan) {
-    veloPeque.textContent = conPlan ? 'Buscando el siguiente paso…' : 'Ya está fuera. No hace falta sostenerlo.';
+  function mostrarVelo(conPlan, esVoz) {
+    clearInterval(etapasTimer);
+    clearTimeout(veloTimer);
     veloPlan.textContent = '';
     veloPlan.hidden = true;
     veloToca.hidden = true;
     velo.classList.add('on');
     velo.setAttribute('aria-hidden', 'false');
-    clearTimeout(veloTimer);
-    if (!conPlan) veloTimer = setTimeout(ocultarVelo, 1900);
+    if (conPlan) {
+      var etapas = [esVoz ? 'Escuchado.' : 'Recogido.', 'Pensando…', 'Identificando el siguiente paso…'];
+      var i = 0;
+      veloPeque.textContent = etapas[0];
+      etapasTimer = setInterval(function () {
+        i++;
+        if (i < etapas.length) veloPeque.textContent = etapas[i];
+        else clearInterval(etapasTimer);
+      }, 1200);
+    } else {
+      veloPeque.textContent = 'Ya está fuera. No hace falta sostenerlo.';
+      veloTimer = setTimeout(ocultarVelo, 1900);
+    }
   }
   function mostrarPlanEnVelo(plan) {
+    clearInterval(etapasTimer);
     veloPeque.textContent = 'Siguiente paso:';
     veloPlan.textContent = plan;
     veloPlan.hidden = false;
     veloToca.hidden = false;
   }
   function ocultarVelo() {
+    clearInterval(etapasTimer);
     velo.classList.remove('on');
     velo.setAttribute('aria-hidden', 'true');
   }
@@ -949,20 +963,27 @@
     });
   }
 
-  function pedirPlan(p) {
+  function pedirPlan(p, tMin) {
+    function revela(fn) {
+      setTimeout(fn, Math.max(0, (tMin || 0) - Date.now()));
+    }
     llamarPlan(p.texto).then(function (plan) {
       p.plan = plan;
       persistir();
-      if (velo.classList.contains('on')) mostrarPlanEnVelo(plan);
-      if (!vRevisar.hidden) pintarRevisar();
+      revela(function () {
+        if (velo.classList.contains('on')) mostrarPlanEnVelo(plan);
+        if (!vRevisar.hidden) pintarRevisar();
+      });
     }).catch(function (err) {
       var code = err && err.code;
       var msg = code === 'clave' ? 'La clave de API no es válida. Revísala en el panel de ajustes.'
         : code === 'limite' ? 'Límite de la API alcanzado. Prueba de nuevo en un rato.'
         : 'No se pudo pedir el plan. El pensamiento está guardado igualmente.';
-      if (velo.classList.contains('on')) ocultarVelo();
-      toast(msg);
-      if (!vRevisar.hidden) pintarRevisar();
+      revela(function () {
+        if (velo.classList.contains('on')) ocultarVelo();
+        toast(msg);
+        if (!vRevisar.hidden) pintarRevisar();
+      });
     });
   }
 
@@ -1069,14 +1090,33 @@
     recActivo = false;
     var total = (committed + ' ' + finAct + ' ' + interimAct).replace(/\s+/g, ' ').trim();
     if (rec) { try { rec.stop(); } catch (e) {} }
+    cerrarEscucha();
     if (total) {
-      texto.value = texto.value ? texto.value.replace(/\s+$/, '') + ' ' + total : total;
-      mostrarPapel(false);
+      soltarVoz(total);
     } else {
       toast('No llegó nada de voz.');
       estadoTrasEscucha();
     }
-    cerrarEscucha();
+  }
+
+  /* voz: se guarda directo, sin pasar por el texto */
+  function soltarVoz(t) {
+    var pensamiento = {
+      id: uid(),
+      texto: t,
+      tema: null,
+      plan: null,
+      createdAt: new Date().toISOString(),
+      estado: 'pendiente',
+      closedAt: null
+    };
+    thoughts.push(pensamiento);
+    persistir();
+    pintarBadge();
+    mostrarReposo();
+    var conPlan = !!obtenerClave();
+    mostrarVelo(conPlan, true);
+    if (conPlan) pedirPlan(pensamiento, Date.now() + 2600);
   }
 
   function cancelarDictado() {
