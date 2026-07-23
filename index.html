@@ -329,22 +329,24 @@
   }
   .card .plan {
     margin: 0 0 10px;
-    padding: 9px 12px;
-    background: var(--sage-soft);
+    padding: 10px 12px;
+    background: var(--sunken);
     border-radius: 9px;
-    font-size: 14px;
-    line-height: 1.45;
     color: var(--text);
   }
-  .card .plan .etiq {
+  .vp-bloque { margin-top: 12px; }
+  .vp-bloque:first-child { margin-top: 0; }
+  .vp-etiq {
     display: block;
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    color: var(--sage);
+    color: var(--muted);
     margin-bottom: 3px;
   }
+  .vp-bloque.paso .vp-etiq { color: var(--sage); }
+  .card .plan .vp-texto { font-size: 14px; line-height: 1.45; }
   .card .meta {
     display: flex;
     align-items: center;
@@ -596,16 +598,20 @@
     color: var(--text);
   }
   .velo .peque { color: var(--muted); font-size: 14px; }
+  .velo { overflow-y: auto; }
   .velo .velo-plan {
+    max-width: 30rem;
+    width: 100%;
+    text-align: left;
+    margin: 10px 0 0;
+    padding: 0 30px;
+  }
+  .velo .vp-bloque { margin-top: 16px; }
+  .velo .vp-texto {
     font-family: var(--serif);
-    font-size: 19px;
+    font-size: 17px;
     line-height: 1.5;
     color: var(--text);
-    max-width: 30rem;
-    text-align: center;
-    text-wrap: balance;
-    margin: 8px 0 0;
-    padding: 0 26px;
   }
   .velo .toca {
     color: var(--faint);
@@ -776,7 +782,7 @@
 <div class="velo" id="velo" aria-hidden="true">
   <div class="grande">Soltado.</div>
   <div class="peque" id="veloPeque">Ya está fuera. No hace falta sostenerlo.</div>
-  <p class="velo-plan" id="veloPlan" hidden></p>
+  <div class="velo-plan" id="veloPlan" hidden></div>
   <div class="brasa"></div>
   <div class="toca" id="veloToca" hidden>toca para cerrar</div>
 </div>
@@ -873,7 +879,7 @@
     pintarBadge();
     mostrarVelo(!!conPlan, false);
     if (window.SpeechRecognition || window.webkitSpeechRecognition) mostrarReposo();
-    if (conPlan) pedirPlan(pensamiento, Date.now() + 2600);
+    if (conPlan) pedirPlan(pensamiento, Date.now() + 4200);
   }
   btnSoltar.addEventListener('click', function () { soltar(false); });
   $('btnSoltarPlan').addEventListener('click', function () { soltar(true); });
@@ -889,7 +895,7 @@
     velo.classList.add('on');
     velo.setAttribute('aria-hidden', 'false');
     if (conPlan) {
-      var etapas = [esVoz ? 'Escuchado.' : 'Recogido.', 'Pensando…', 'Identificando el siguiente paso…'];
+      var etapas = [esVoz ? 'Escuchado.' : 'Recogido.', 'Pensando…', 'Entendiendo lo que hay debajo…', 'Identificando el siguiente paso…'];
       var i = 0;
       veloPeque.textContent = etapas[0];
       etapasTimer = setInterval(function () {
@@ -904,8 +910,9 @@
   }
   function mostrarPlanEnVelo(plan) {
     clearInterval(etapasTimer);
-    veloPeque.textContent = 'Siguiente paso:';
-    veloPlan.textContent = plan;
+    veloPeque.textContent = '';
+    veloPlan.innerHTML = '';
+    construirPlanDOM(plan, veloPlan);
     veloPlan.hidden = false;
     veloToca.hidden = false;
   }
@@ -920,13 +927,19 @@
   var LS_CLAVE = 'suelta.apikey';
   var PROMPT_PLAN = 'Eres parte de Suelta, una app donde el usuario vuelca pensamientos rumiantes ' +
     '(trabajo, carrera, decisiones de vida) para poder soltarlos. Recibirás un pensamiento tal cual ' +
-    'fue volcado, a menudo dictado y sin pulir. Tu trabajo: devolver UN único siguiente paso pequeño ' +
-    'y concreto que lo desatasque. Reglas estrictas: máximo 2 frases; nada de listas; nada de ' +
-    'preguntas al usuario; nada de análisis largos ni terapia. Si es una decisión grande (mudanza, ' +
-    'carrera), el paso debe ser de proceso, por ejemplo: "Apunta los 3 criterios que de verdad ' +
-    'importan y ponle una fecha para decidir con lo que haya". Si es un desahogo sin acción posible, ' +
-    'dilo con calidez y sugiere soltarlo o llevarlo a la revisión semanal. Responde solo con el paso, ' +
-    'en español, tono cercano y directo, tuteando.';
+    'fue volcado, a menudo dictado y sin pulir. Devuelve un análisis breve en tres campos: ' +
+    '(1) "reflejo": qué está pensando o sintiendo de verdad el usuario debajo de lo que dice, ' +
+    'reformulado con claridad y calidez, máximo 2 frases. ' +
+    '(2) "mecanismo": el fundamento psicológico de por qué su cabeza hace esto (p. ej. rumiación ' +
+    'ante una decisión sin fecha, intolerancia a la incertidumbre, catastrofización, bucles ' +
+    'abiertos que la mente no suelta), en lenguaje llano de divulgación; nunca jerga clínica ni ' +
+    'diagnósticos sobre la persona, máximo 2 frases. ' +
+    '(3) "paso": UN único siguiente paso pequeño y concreto que desatasque, máximo 2 frases; si es ' +
+    'una decisión grande, un paso de proceso (p. ej. "Apunta los 3 criterios que de verdad importan ' +
+    'y ponle una fecha para decidir con lo que haya"); si es puro desahogo sin acción posible, dilo ' +
+    'con calidez y sugiere soltarlo. ' +
+    'Reglas: nada de listas dentro de los campos, nada de preguntas al usuario, nada de terapia. ' +
+    'Español, tono cercano y directo, tuteando.';
 
   function obtenerClave() {
     try { return localStorage.getItem(LS_CLAVE) || ''; } catch (e) { return ''; }
@@ -941,8 +954,25 @@
       },
       body: JSON.stringify({
         model: 'gpt-5-mini',
-        max_completion_tokens: 1000,
-        reasoning_effort: 'minimal',
+        max_completion_tokens: 1600,
+        reasoning_effort: 'low',
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'analisis_suelta',
+            strict: true,
+            schema: {
+              type: 'object',
+              properties: {
+                reflejo: { type: 'string' },
+                mecanismo: { type: 'string' },
+                paso: { type: 'string' }
+              },
+              required: ['reflejo', 'mecanismo', 'paso'],
+              additionalProperties: false
+            }
+          }
+        },
         messages: [
           { role: 'system', content: PROMPT_PLAN },
           { role: 'user', content: pensamiento }
@@ -959,8 +989,36 @@
       var t = (data.choices && data.choices[0] && data.choices[0].message &&
                data.choices[0].message.content || '').trim();
       if (!t) throw { code: 'vacio' };
+      try {
+        var obj = JSON.parse(t);
+        if (obj && (obj.paso || obj.reflejo)) return obj;
+      } catch (e) {}
       return t;
     });
+  }
+
+  /* renderiza un plan (objeto de 3 partes, o texto legado) en un contenedor */
+  function bloquePlan(cont, etiqueta, textoB, esPaso) {
+    var b = document.createElement('div');
+    b.className = 'vp-bloque' + (esPaso ? ' paso' : '');
+    var e = document.createElement('span');
+    e.className = 'vp-etiq';
+    e.textContent = etiqueta;
+    var tx = document.createElement('div');
+    tx.className = 'vp-texto';
+    tx.textContent = textoB;
+    b.appendChild(e);
+    b.appendChild(tx);
+    cont.appendChild(b);
+  }
+  function construirPlanDOM(plan, cont) {
+    if (typeof plan === 'string') {
+      bloquePlan(cont, 'Siguiente paso', plan, true);
+      return;
+    }
+    if (plan.reflejo) bloquePlan(cont, 'Lo que hay debajo', plan.reflejo, false);
+    if (plan.mecanismo) bloquePlan(cont, 'Por qué tu cabeza hace esto', plan.mecanismo, false);
+    if (plan.paso) bloquePlan(cont, 'Siguiente paso', plan.paso, true);
   }
 
   function pedirPlan(p, tMin) {
@@ -1116,7 +1174,7 @@
     mostrarReposo();
     var conPlan = !!obtenerClave();
     mostrarVelo(conPlan, true);
-    if (conPlan) pedirPlan(pensamiento, Date.now() + 2600);
+    if (conPlan) pedirPlan(pensamiento, Date.now() + 4200);
   }
 
   function cancelarDictado() {
@@ -1171,11 +1229,7 @@
     if (t.plan) {
       var planDiv = document.createElement('div');
       planDiv.className = 'plan';
-      var etiq = document.createElement('span');
-      etiq.className = 'etiq';
-      etiq.textContent = 'Siguiente paso';
-      planDiv.appendChild(etiq);
-      planDiv.appendChild(document.createTextNode(t.plan));
+      construirPlanDOM(t.plan, planDiv);
       card.appendChild(planDiv);
     }
 
@@ -1297,7 +1351,10 @@
     var d = new Date(t.createdAt);
     var f = d.toISOString().slice(0, 10) + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
     var cuerpo = t.texto.replace(/\r?\n/g, '\n  ');
-    return '- **' + f + '** — ' + cuerpo;
+    var linea = '- **' + f + '** — ' + cuerpo;
+    var paso = t.plan && (typeof t.plan === 'string' ? t.plan : t.plan.paso);
+    if (paso) linea += '\n  - *Siguiente paso:* ' + String(paso).replace(/\r?\n/g, ' ');
+    return linea;
   }
   function construirMd() {
     var hoy = new Date();
