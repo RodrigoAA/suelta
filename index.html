@@ -196,7 +196,6 @@
   @media (prefers-reduced-motion: no-preference) {
     .mic-hero { animation: respira 3.2s ease-in-out infinite; }
   }
-  .reposo-pista { color: var(--faint); font-size: 13px; margin: 4px 0 0; text-align: center; }
   .enlace-escribir {
     appearance: none;
     border: 0;
@@ -211,14 +210,6 @@
   .papel[hidden] { display: none; }
 
   /* ---------- volcar ---------- */
-  .prompt {
-    font-family: var(--serif);
-    font-style: italic;
-    font-size: 21px;
-    color: var(--muted);
-    margin: 6px 2px 14px;
-    text-wrap: balance;
-  }
   .papel {
     background: var(--surface);
     border: 1px solid var(--line);
@@ -628,7 +619,6 @@
       Este navegador no permite guardar datos localmente: lo que vuelques vivirá solo mientras la
       pestaña esté abierta. Exporta antes de cerrar.
     </div>
-    <p class="prompt">¿Qué te está dando vueltas?</p>
     <div class="reposo" id="reposo">
       <button class="mic-hero" id="btnMicHero" aria-label="Tocar para dictar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -637,7 +627,6 @@
           <line x1="12" y1="18" x2="12" y2="21"></line>
         </svg>
       </button>
-      <p class="reposo-pista">Toca y habla. El texto no se muestra mientras hablas.</p>
       <button class="enlace-escribir" id="btnEscribir">Prefiero escribirlo</button>
     </div>
     <div class="papel" id="papel" hidden>
