@@ -430,6 +430,71 @@
     margin-bottom: 8px;
   }
 
+  /* ---------- modo escucha ---------- */
+  .escucha {
+    position: fixed;
+    inset: 0;
+    background: var(--ground);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    z-index: 52;
+  }
+  .escucha[hidden] { display: none; }
+  .esc-anillo {
+    position: relative;
+    width: 108px;
+    height: 108px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--lamp);
+    border: 1.5px solid var(--lamp);
+    background: var(--lamp-soft);
+    margin-bottom: 10px;
+  }
+  .esc-anillo svg { width: 42px; height: 42px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .esc-anillo { animation: respira 2.4s ease-in-out infinite; }
+    @keyframes respira {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+  }
+  .esc-onda {
+    position: absolute;
+    inset: -1.5px;
+    border-radius: 50%;
+    border: 1.5px solid var(--lamp);
+    opacity: 0;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .esc-onda.go { animation: onda 0.9s ease-out; }
+    @keyframes onda {
+      from { transform: scale(1); opacity: 0.8; }
+      to { transform: scale(1.7); opacity: 0; }
+    }
+  }
+  .esc-estado {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 21px;
+    color: var(--text);
+    margin: 0;
+  }
+  .esc-palabras {
+    color: var(--faint);
+    font-size: 13px;
+    margin: 0;
+    min-height: 1.2em;
+    font-variant-numeric: tabular-nums;
+  }
+  .esc-acciones { display: flex; gap: 10px; margin-top: 22px; }
+
   /* ---------- velo soltado ---------- */
   .velo {
     position: fixed;
@@ -574,6 +639,23 @@
   </div>
 </div>
 
+<div class="escucha" id="escucha" hidden>
+  <div class="esc-anillo">
+    <span class="esc-onda" id="escOnda"></span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+      <path d="M5 11a7 7 0 0 0 14 0"></path>
+      <line x1="12" y1="18" x2="12" y2="21"></line>
+    </svg>
+  </div>
+  <p class="esc-estado" id="escEstado">Grabando…</p>
+  <p class="esc-palabras" id="escPalabras">El texto no se muestra: habla sin filtro.</p>
+  <div class="esc-acciones">
+    <button class="btn-sec" id="escCancelar">Cancelar</button>
+    <button class="btn-soltar" id="escListo">Listo</button>
+  </div>
+</div>
+
 <div class="velo" id="velo" aria-hidden="true">
   <div class="grande">Soltado.</div>
   <div class="peque">Ya está fuera. No hace falta sostenerlo.</div>
@@ -651,7 +733,6 @@
   function soltar() {
     var t = texto.value.trim();
     if (!t) { toast('Escribe o dicta algo primero.'); return; }
-    if (recActivo) pararDictado();
     thoughts.push({
       id: uid(),
       texto: t,
@@ -681,18 +762,25 @@
   }
   velo.addEventListener('click', ocultarVelo);
 
-  /* ---------- dictado ---------- */
+  /* ---------- dictado (modo escucha: sin mostrar el texto) ---------- */
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  var rec = null, recActivo = false, baseTexto = '';
+  var rec = null, recActivo = false, escCancelado = false;
+  var committed = '', finAct = '', interimAct = '';
+  var escucha = $('escucha'), escEstado = $('escEstado'), escPalabras = $('escPalabras'), escOnda = $('escOnda');
   if (!SR) {
     btnMic.style.display = 'none';
   }
-  function empezarDictado() {
+
+  function cuentaPalabras(s) {
+    s = s.replace(/\s+/g, ' ').trim();
+    return s ? s.split(' ').length : 0;
+  }
+
+  function sesionRec() {
     rec = new SR();
     rec.lang = 'es-ES';
     rec.continuous = true;
     rec.interimResults = true;
-    baseTexto = texto.value ? texto.value.replace(/\s+$/, '') + ' ' : '';
     rec.onresult = function (e) {
       var fin = '', interim = '';
       for (var i = 0; i < e.results.length; i++) {
@@ -700,40 +788,89 @@
         if (r.isFinal) fin += r[0].transcript;
         else interim += r[0].transcript;
       }
-      texto.value = baseTexto + fin + interim;
+      finAct = fin;
+      interimAct = interim;
+      var n = cuentaPalabras(committed + ' ' + finAct + ' ' + interimAct);
+      escEstado.textContent = 'Te escucho.';
+      escPalabras.textContent = n + (n === 1 ? ' palabra captada' : ' palabras captadas');
+      escOnda.classList.remove('go');
+      void escOnda.offsetWidth;
+      escOnda.classList.add('go');
     };
     rec.onerror = function (e) {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         toast('Permite el micrófono cuando el navegador lo pida.');
+        cancelarDictado();
       } else if (e.error === 'network') {
         toast('Este navegador no trae dictado propio (Brave lo desactiva). Usa el micro del teclado.');
-      } else if (e.error !== 'aborted' && e.error !== 'no-speech') {
-        toast('El dictado se cortó. Puedes seguir escribiendo.');
+        cancelarDictado();
+      } else if (e.error === 'audio-capture') {
+        toast('No se encontró micrófono.');
+        cancelarDictado();
       }
+      /* 'no-speech' y 'aborted' se ignoran: la sesión se reinicia sola */
     };
     rec.onend = function () {
-      recActivo = false;
-      btnMic.classList.remove('listening');
-      btnMic.setAttribute('aria-pressed', 'false');
+      if (recActivo && !escCancelado) {
+        /* el navegador corta la sesión por silencio: consolidar y reabrir */
+        committed = (committed + ' ' + finAct).replace(/\s+/g, ' ').trim();
+        finAct = '';
+        interimAct = '';
+        try { sesionRec(); } catch (err) { terminarDictado(); }
+      }
     };
+    rec.start();
+  }
+
+  function empezarDictado() {
+    committed = ''; finAct = ''; interimAct = '';
+    escCancelado = false;
+    escEstado.textContent = 'Grabando…';
+    escPalabras.textContent = 'El texto no se muestra: habla sin filtro.';
     try {
-      rec.start();
       recActivo = true;
+      sesionRec();
+      escucha.hidden = false;
       btnMic.classList.add('listening');
       btnMic.setAttribute('aria-pressed', 'true');
     } catch (e) {
+      recActivo = false;
       toast('No se pudo iniciar el dictado.');
     }
   }
-  function pararDictado() {
-    if (rec) { try { rec.stop(); } catch (e) {} }
-    recActivo = false;
+
+  function cerrarEscucha() {
+    escucha.hidden = true;
     btnMic.classList.remove('listening');
     btnMic.setAttribute('aria-pressed', 'false');
+    committed = ''; finAct = ''; interimAct = '';
   }
+
+  function terminarDictado() {
+    if (!recActivo) return;
+    recActivo = false;
+    var total = (committed + ' ' + finAct + ' ' + interimAct).replace(/\s+/g, ' ').trim();
+    if (rec) { try { rec.stop(); } catch (e) {} }
+    if (total) {
+      texto.value = texto.value ? texto.value.replace(/\s+$/, '') + ' ' + total : total;
+    } else {
+      toast('No llegó nada de voz.');
+    }
+    cerrarEscucha();
+  }
+
+  function cancelarDictado() {
+    escCancelado = true;
+    recActivo = false;
+    if (rec) { try { rec.stop(); } catch (e) {} }
+    cerrarEscucha();
+  }
+
   btnMic.addEventListener('click', function () {
-    if (recActivo) pararDictado(); else empezarDictado();
+    if (recActivo) terminarDictado(); else empezarDictado();
   });
+  $('escListo').addEventListener('click', terminarDictado);
+  $('escCancelar').addEventListener('click', cancelarDictado);
 
   /* ---------- pestañas ---------- */
   var tabVolcar = $('tabVolcar'), tabRevisar = $('tabRevisar');
@@ -978,7 +1115,9 @@
   $('hojaCerrar').addEventListener('click', cerrarHoja);
   $('hojaFondo').addEventListener('click', cerrarHoja);
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !hoja.hidden) cerrarHoja();
+    if (e.key !== 'Escape') return;
+    if (!escucha.hidden) { cancelarDictado(); return; }
+    if (!hoja.hidden) cerrarHoja();
   });
 
   /* ---------- service worker ---------- */
