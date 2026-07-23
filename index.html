@@ -1073,6 +1073,31 @@
     return s ? s.split(' ').length : 0;
   }
 
+  /* contador fluido: los resultados llegan a ráfagas; el número sube de uno en uno */
+  var palabrasObjetivo = 0, palabrasMostradas = 0, tickerTimer = null;
+  function actualizarContador() {
+    escPalabras.textContent = palabrasMostradas + (palabrasMostradas === 1 ? ' palabra captada' : ' palabras captadas');
+  }
+  function arrancarTicker() {
+    if (tickerTimer) return;
+    tickerTimer = setInterval(function () {
+      if (palabrasMostradas < palabrasObjetivo) {
+        palabrasMostradas++;
+        actualizarContador();
+        escOnda.classList.remove('go');
+        void escOnda.offsetWidth;
+        escOnda.classList.add('go');
+      } else if (palabrasMostradas > palabrasObjetivo) {
+        palabrasMostradas = palabrasObjetivo;
+        actualizarContador();
+      }
+    }, 120);
+  }
+  function pararTicker() {
+    clearInterval(tickerTimer);
+    tickerTimer = null;
+  }
+
   function sesionRec() {
     rec = new SR();
     rec.lang = 'es-ES';
@@ -1087,12 +1112,9 @@
       }
       finAct = fin;
       interimAct = interim;
-      var n = cuentaPalabras(committed + ' ' + finAct + ' ' + interimAct);
+      palabrasObjetivo = cuentaPalabras(committed + ' ' + finAct + ' ' + interimAct);
       escEstado.textContent = 'Te escucho.';
-      escPalabras.textContent = n + (n === 1 ? ' palabra captada' : ' palabras captadas');
-      escOnda.classList.remove('go');
-      void escOnda.offsetWidth;
-      escOnda.classList.add('go');
+      arrancarTicker();
     };
     rec.onerror = function (e) {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
@@ -1121,6 +1143,7 @@
 
   function empezarDictado() {
     committed = ''; finAct = ''; interimAct = '';
+    palabrasObjetivo = 0; palabrasMostradas = 0;
     escCancelado = false;
     escEstado.textContent = 'Grabando…';
     escPalabras.textContent = 'El texto no se muestra: habla sin filtro.';
@@ -1137,6 +1160,7 @@
   }
 
   function cerrarEscucha() {
+    pararTicker();
     escucha.hidden = true;
     btnMic.classList.remove('listening');
     btnMic.setAttribute('aria-pressed', 'false');
