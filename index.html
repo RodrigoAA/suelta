@@ -389,6 +389,81 @@
   .card.cerrada { opacity: 0.75; }
   .card.cerrada .ttexto { color: var(--muted); }
 
+  /* ---------- cuaderno (revisar) ---------- */
+  .cuaderno {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 40rem;
+    margin: 0 auto;
+  }
+  .pestanas {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 0 10px;
+    flex: none;
+    scrollbar-width: none;
+  }
+  .pestanas::-webkit-scrollbar { display: none; }
+  .pestana {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px 8px;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    background: var(--sunken);
+    color: var(--muted);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .pestana.activa { background: var(--surface); color: var(--text); }
+  .pestana .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .pag-nav {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .pag-btn {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .pag-btn:disabled { opacity: 0.35; cursor: default; }
+  .pag-info {
+    color: var(--muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    min-width: 54px;
+    text-align: center;
+  }
+  .pag-acciones {
+    flex: none;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn-cerrarpag { color: var(--sage); border-color: var(--sage); }
+  .btn-peligro { color: var(--danger); border-color: var(--danger); }
+
   .vacio {
     font-family: var(--serif);
     font-style: italic;
@@ -821,11 +896,17 @@
 
   <main id="vRevisar" role="tabpanel" hidden>
     <p class="statline" id="statline"></p>
-    <div class="lista" id="lista"></div>
-    <details class="seccion" id="secArchivo">
-      <summary>Archivo · <span id="nArchivo">0</span></summary>
-      <div class="cuerpo lista" id="listaArchivo"></div>
-    </details>
+    <div class="cuaderno">
+      <div class="pestanas" id="pestanas" role="tablist" aria-label="Temas"></div>
+      <div class="diario pagina" id="pagina" hidden></div>
+      <div class="vacio" id="revVacio" hidden></div>
+      <div class="pag-nav" id="pagNav" hidden>
+        <button class="pag-btn" id="pagPrev" aria-label="Página anterior">‹</button>
+        <span class="pag-info" id="pagInfo"></span>
+        <button class="pag-btn" id="pagNext" aria-label="Página siguiente">›</button>
+      </div>
+      <div class="pag-acciones" id="pagAcciones" hidden></div>
+    </div>
   </main>
 </div>
 
@@ -909,7 +990,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var texto = $('texto'), btnSoltar = $('btnSoltar'), btnMic = $('btnMic');
-  var badge = $('badge'), lista = $('lista'), listaArchivo = $('listaArchivo');
+  var badge = $('badge');
   var statline = $('statline');
   var velo = $('velo'), toastEl = $('toast');
 
@@ -952,19 +1033,11 @@
     toastTimer = setTimeout(function () { toastEl.classList.remove('on'); }, 2600);
   }
 
-  var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-  function fechaRel(iso) {
-    var d = new Date(iso), ahora = new Date();
-    var hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-    var dia = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    var difDias = Math.round((hoy - dia) / 86400000);
-    var hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-    if (difDias === 0) return 'hoy ' + hm;
-    if (difDias === 1) return 'ayer ' + hm;
-    if (difDias < 7) return 'hace ' + difDias + ' días';
-    var f = d.getDate() + ' ' + MESES[d.getMonth()];
-    if (d.getFullYear() !== ahora.getFullYear()) f += ' ' + d.getFullYear();
-    return f;
+  function fechaCorta(iso) {
+    var d = new Date(iso);
+    var p2 = function (n) { return ('0' + n).slice(-2); };
+    return p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '/' + d.getFullYear() +
+      ' — ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
   }
 
   /* ---------- soltar ---------- */
@@ -1057,6 +1130,8 @@
     '(4) "cita_reflejo": una cita textual EXACTA del campo "texto" (de 3 a 12 palabras, copiada ' +
     'literalmente) donde más se note lo que señalas en "reflejo"; cadena vacía si no hay ninguna clara. ' +
     '(5) "cita_mecanismo": igual, pero para "mecanismo"; las dos citas no deben solaparse. ' +
+    '(6) "tema": clasifica el pensamiento en el tema más dominante: trabajo, salud, casa, ' +
+    'relaciones, dinero o vida. ' +
     'Reglas: nada de listas dentro de los campos, nada de preguntas al usuario, nada de terapia. ' +
     'Español, tono cercano y directo, tuteando.';
 
@@ -1088,9 +1163,10 @@
                 cita_reflejo: { type: 'string' },
                 mecanismo: { type: 'string' },
                 cita_mecanismo: { type: 'string' },
-                paso: { type: 'string' }
+                paso: { type: 'string' },
+                tema: { type: 'string', enum: ['trabajo', 'salud', 'casa', 'relaciones', 'dinero', 'vida'] }
               },
-              required: ['texto', 'reflejo', 'cita_reflejo', 'mecanismo', 'cita_mecanismo', 'paso'],
+              required: ['texto', 'reflejo', 'cita_reflejo', 'mecanismo', 'cita_mecanismo', 'paso', 'tema'],
               additionalProperties: false
             }
           }
@@ -1164,6 +1240,7 @@
         citaReflejo: res.cita_reflejo || '',
         citaMecanismo: res.cita_mecanismo || ''
       };
+      if (res.tema && TEMAS_INFO[res.tema]) p.tema = res.tema;
     } else {
       p.plan = res;
     }
@@ -1208,6 +1285,37 @@
       pos = m.fin;
     });
     if (pos < textoP.length) cont.appendChild(document.createTextNode(textoP.slice(pos)));
+  }
+
+  function crearAnotaciones(planRaw) {
+    var anot = document.createElement('div');
+    anot.className = 'anotaciones';
+    var plan = (planRaw && typeof planRaw === 'object') ? planRaw : { paso: String(planRaw || '') };
+    [
+      ['Lo que hay debajo', plan.reflejo, false, plan.citaReflejo ? 1 : 0],
+      ['Por qué tu cabeza hace esto', plan.mecanismo, false, plan.citaMecanismo ? 2 : 0],
+      ['Siguiente paso', plan.paso, true, 0]
+    ].forEach(function (fila) {
+      if (!fila[1]) return;
+      var b = document.createElement('div');
+      b.className = 'anot-bloque' + (fila[2] ? ' paso' : '');
+      var e = document.createElement('span');
+      e.className = 'anot-etiq';
+      if (fila[3]) {
+        var n = document.createElement('span');
+        n.className = 'anot-num';
+        n.textContent = fila[3];
+        e.appendChild(n);
+      }
+      e.appendChild(document.createTextNode(fila[0]));
+      var tx = document.createElement('div');
+      tx.className = 'anot-texto';
+      tx.textContent = fila[1];
+      b.appendChild(e);
+      b.appendChild(tx);
+      anot.appendChild(b);
+    });
+    return anot;
   }
 
   function pedirPlan(p, tMin) {
@@ -1342,10 +1450,7 @@
     palabrasRender = [];
     diarioTexto.innerHTML = '';
     escCancelado = false;
-    var ahora = new Date();
-    var p2 = function (n) { return ('0' + n).slice(-2); };
-    $('diarioFecha').textContent = p2(ahora.getDate()) + '/' + p2(ahora.getMonth() + 1) + '/' + ahora.getFullYear() +
-      ' — ' + p2(ahora.getHours()) + ':' + p2(ahora.getMinutes());
+    $('diarioFecha').textContent = fechaCorta(new Date());
     faseEscucha = 'grabando';
     clearInterval(procTimer);
     var viejoAnot = $('anotaciones');
@@ -1464,34 +1569,8 @@
     construirTextoAnotado(diarioTexto, p.texto, marcasDe(p.plan));
     var viejo = $('anotaciones');
     if (viejo) viejo.remove();
-    var anot = document.createElement('div');
+    var anot = crearAnotaciones(p.plan);
     anot.id = 'anotaciones';
-    anot.className = 'anotaciones';
-    var plan = (p.plan && typeof p.plan === 'object') ? p.plan : { paso: String(p.plan || '') };
-    [
-      ['Lo que hay debajo', plan.reflejo, false, plan.citaReflejo ? 1 : 0],
-      ['Por qué tu cabeza hace esto', plan.mecanismo, false, plan.citaMecanismo ? 2 : 0],
-      ['Siguiente paso', plan.paso, true, 0]
-    ].forEach(function (fila) {
-      if (!fila[1]) return;
-      var b = document.createElement('div');
-      b.className = 'anot-bloque' + (fila[2] ? ' paso' : '');
-      var e = document.createElement('span');
-      e.className = 'anot-etiq';
-      if (fila[3]) {
-        var n = document.createElement('span');
-        n.className = 'anot-num';
-        n.textContent = fila[3];
-        e.appendChild(n);
-      }
-      e.appendChild(document.createTextNode(fila[0]));
-      var tx = document.createElement('div');
-      tx.className = 'anot-texto';
-      tx.textContent = fila[1];
-      b.appendChild(e);
-      b.appendChild(tx);
-      anot.appendChild(b);
-    });
     diario.appendChild(anot);
     diario.scrollTop = Math.max(0, anot.offsetTop - 90);
     var listo = $('escListo');
@@ -1563,70 +1642,107 @@
     badge.classList.toggle('on', n > 0);
   }
 
-  function cardDe(t, esArchivo) {
-    var card = document.createElement('article');
-    card.className = 'card' + (esArchivo ? ' cerrada' : '');
+  var revFiltro = 'todos';
+  var revIndex = 0;
+  var TEMAS_INFO = {
+    trabajo: { nombre: 'Trabajo', dot: '#7FA3C9' },
+    salud: { nombre: 'Salud', dot: '#C98B7F' },
+    casa: { nombre: 'Casa', dot: '#8FBF95' },
+    relaciones: { nombre: 'Relaciones', dot: '#B195C9' },
+    dinero: { nombre: 'Dinero', dot: '#C9A06B' },
+    vida: { nombre: 'Vida', dot: '#9AA7AE' }
+  };
 
-    var p = document.createElement('p');
-    p.className = 'ttexto';
+  function listaRevisar() {
+    if (revFiltro === 'archivo') {
+      return cerrados().slice().sort(function (a, b) { return (b.closedAt || '') < (a.closedAt || '') ? -1 : 1; });
+    }
+    var pend = pendientes().slice().sort(function (a, b) { return b.createdAt < a.createdAt ? -1 : 1; });
+    if (revFiltro === 'todos') return pend;
+    return pend.filter(function (t) { return t.tema === revFiltro; });
+  }
+
+  function pintarPestanas() {
+    var cont = $('pestanas');
+    cont.innerHTML = '';
+    var pend = pendientes();
+    var cuentas = {};
+    pend.forEach(function (t) {
+      if (t.tema && TEMAS_INFO[t.tema]) cuentas[t.tema] = (cuentas[t.tema] || 0) + 1;
+    });
+    var defs = [{ id: 'todos', nombre: 'Todos', dot: null, n: pend.length }];
+    Object.keys(TEMAS_INFO).forEach(function (k) {
+      if (cuentas[k]) defs.push({ id: k, nombre: TEMAS_INFO[k].nombre, dot: TEMAS_INFO[k].dot, n: cuentas[k] });
+    });
+    defs.push({ id: 'archivo', nombre: 'Archivo', dot: null, n: cerrados().length });
+    if (!defs.some(function (d) { return d.id === revFiltro; })) { revFiltro = 'todos'; revIndex = 0; }
+    defs.forEach(function (d) {
+      var b = document.createElement('button');
+      b.className = 'pestana' + (d.id === revFiltro ? ' activa' : '');
+      if (d.dot) {
+        var punto = document.createElement('span');
+        punto.className = 'dot';
+        punto.style.background = d.dot;
+        b.appendChild(punto);
+      }
+      b.appendChild(document.createTextNode(d.nombre + (d.n ? ' · ' + d.n : '')));
+      b.addEventListener('click', function () { revFiltro = d.id; revIndex = 0; pintarRevisar(); });
+      cont.appendChild(b);
+    });
+  }
+
+  function pintarRevisar() {
+    pintarPestanas();
+
+    var semana = Date.now() - 7 * 86400000;
+    var soltados7 = thoughts.filter(function (t) { return new Date(t.createdAt).getTime() >= semana; }).length;
+    var cerrados7 = cerrados().filter(function (t) { return t.closedAt && new Date(t.closedAt).getTime() >= semana; }).length;
+    statline.textContent = pendientes().length + ' pendientes · en 7 días has soltado ' + soltados7 + ' y cerrado ' + cerrados7;
+
+    var lista = listaRevisar();
+    var pag = $('pagina'), vacio = $('revVacio'), nav = $('pagNav'), acc = $('pagAcciones');
+
+    if (!lista.length) {
+      pag.hidden = true;
+      nav.hidden = true;
+      acc.hidden = true;
+      vacio.hidden = false;
+      vacio.textContent = revFiltro === 'archivo' ? 'El archivo está vacío.'
+        : revFiltro === 'todos' ? 'Nada pendiente. Cabeza despejada.'
+        : 'Nada pendiente en esta pestaña.';
+      return;
+    }
+    if (revIndex >= lista.length) revIndex = lista.length - 1;
+    if (revIndex < 0) revIndex = 0;
+    var t = lista[revIndex];
+
+    vacio.hidden = true;
+    pag.hidden = false;
+    nav.hidden = false;
+    acc.hidden = false;
+
+    pag.innerHTML = '';
+    var f = document.createElement('div');
+    f.className = 'diario-fecha';
+    f.textContent = fechaCorta(t.createdAt);
+    pag.appendChild(f);
+    var tx = document.createElement('span');
+    tx.className = 'diario-texto';
     var marcas = marcasDe(t.plan);
-    if (marcas.length) construirTextoAnotado(p, t.texto, marcas);
-    else p.textContent = t.texto;
-    card.appendChild(p);
+    if (marcas.length) construirTextoAnotado(tx, t.texto, marcas);
+    else tx.textContent = t.texto;
+    pag.appendChild(tx);
+    if (t.plan) pag.appendChild(crearAnotaciones(t.plan));
+    pag.scrollTop = 0;
 
-    if (t.plan) {
-      var planDiv = document.createElement('div');
-      planDiv.className = 'plan';
-      construirPlanDOM(t.plan, planDiv, true);
-      card.appendChild(planDiv);
-    }
+    $('pagInfo').textContent = (revIndex + 1) + ' / ' + lista.length;
+    $('pagPrev').disabled = revIndex === 0;
+    $('pagNext').disabled = revIndex === lista.length - 1;
 
-    var meta = document.createElement('div');
-    meta.className = 'meta';
-
-    var time = document.createElement('time');
-    time.textContent = fechaRel(t.createdAt);
-    time.title = new Date(t.createdAt).toLocaleString('es-ES');
-    meta.appendChild(time);
-
-    var acciones = document.createElement('span');
-    acciones.className = 'acciones';
-
-    if (!esArchivo && !t.plan) {
-      var bPlan = document.createElement('button');
-      bPlan.className = 'btn-mini';
-      bPlan.textContent = 'Plan';
-      bPlan.title = 'Pedir un siguiente paso a la IA';
-      bPlan.addEventListener('click', function () {
-        if (!obtenerClave()) {
-          toast('Guarda tu clave de API en el panel de ajustes para pedir planes.');
-          abrirHoja();
-          return;
-        }
-        bPlan.disabled = true;
-        bPlan.textContent = 'Pensando…';
-        pedirPlan(t);
-      });
-      acciones.appendChild(bPlan);
-    }
-
-    if (!esArchivo) {
-      var bCerrar = document.createElement('button');
-      bCerrar.className = 'btn-mini cerrar';
-      bCerrar.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
-      bCerrar.appendChild(document.createTextNode('Cerrar'));
-      bCerrar.title = 'Dar por procesado';
-      bCerrar.addEventListener('click', function () {
-        t.estado = 'cerrado';
-        t.closedAt = new Date().toISOString();
-        persistir();
-        pintarBadge();
-        pintarRevisar();
-      });
-      acciones.appendChild(bCerrar);
-    } else {
+    acc.innerHTML = '';
+    if (revFiltro === 'archivo') {
       var bReabrir = document.createElement('button');
-      bReabrir.className = 'btn-mini';
+      bReabrir.className = 'btn-sec';
       bReabrir.textContent = 'Reabrir';
       bReabrir.addEventListener('click', function () {
         t.estado = 'pendiente';
@@ -1635,21 +1751,47 @@
         pintarBadge();
         pintarRevisar();
       });
-      acciones.appendChild(bReabrir);
+      acc.appendChild(bReabrir);
+    } else {
+      if (!t.plan) {
+        var bPlan = document.createElement('button');
+        bPlan.className = 'btn-sec';
+        bPlan.textContent = 'Anotar';
+        bPlan.title = 'Pedir análisis y siguiente paso';
+        bPlan.addEventListener('click', function () {
+          if (!obtenerClave()) {
+            toast('Guarda tu clave de API en el panel de ajustes.');
+            abrirHoja();
+            return;
+          }
+          bPlan.disabled = true;
+          bPlan.textContent = 'Anotando…';
+          pedirPlan(t);
+        });
+        acc.appendChild(bPlan);
+      }
+      var bCerrar = document.createElement('button');
+      bCerrar.className = 'btn-sec btn-cerrarpag';
+      bCerrar.textContent = 'Cerrar';
+      bCerrar.title = 'Dar por procesado: pasa al archivo';
+      bCerrar.addEventListener('click', function () {
+        t.estado = 'cerrado';
+        t.closedAt = new Date().toISOString();
+        persistir();
+        pintarBadge();
+        pintarRevisar();
+      });
+      acc.appendChild(bCerrar);
     }
-
     var bBorrar = document.createElement('button');
-    bBorrar.className = 'btn-mini';
-    bBorrar.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>';
-    bBorrar.setAttribute('aria-label', 'Borrar');
-    bBorrar.title = 'Borrar';
+    bBorrar.className = 'btn-sec';
+    bBorrar.textContent = 'Borrar';
     var armado = false, armaTimer = null;
     bBorrar.addEventListener('click', function () {
       if (!armado) {
         armado = true;
-        bBorrar.classList.add('peligro');
-        bBorrar.innerHTML = '';
-        bBorrar.appendChild(document.createTextNode('¿Borrar?'));
+        bBorrar.classList.add('btn-peligro');
+        bBorrar.textContent = '¿Borrar?';
         armaTimer = setTimeout(function () { pintarRevisar(); }, 3000);
         return;
       }
@@ -1659,36 +1801,25 @@
       pintarBadge();
       pintarRevisar();
     });
-    acciones.appendChild(bBorrar);
-
-    meta.appendChild(acciones);
-    card.appendChild(meta);
-    return card;
+    acc.appendChild(bBorrar);
   }
 
-  function pintarRevisar() {
-    var pend = pendientes().slice().sort(function (a, b) { return b.createdAt < a.createdAt ? -1 : 1; });
-
-    var semana = Date.now() - 7 * 86400000;
-    var soltados7 = thoughts.filter(function (t) { return new Date(t.createdAt).getTime() >= semana; }).length;
-    var cerrados7 = cerrados().filter(function (t) { return t.closedAt && new Date(t.closedAt).getTime() >= semana; }).length;
-    statline.textContent = pendientes().length + ' pendientes · en 7 días has soltado ' + soltados7 + ' y cerrado ' + cerrados7;
-
-    lista.innerHTML = '';
-    if (!pend.length) {
-      var v = document.createElement('div');
-      v.className = 'vacio';
-      v.textContent = 'Nada pendiente. Cabeza despejada.';
-      lista.appendChild(v);
-    } else {
-      pend.forEach(function (t) { lista.appendChild(cardDe(t, false)); });
-    }
-
-    var cerr = cerrados().slice().sort(function (a, b) { return (b.closedAt || '') < (a.closedAt || '') ? -1 : 1; });
-    $('nArchivo').textContent = cerr.length;
-    listaArchivo.innerHTML = '';
-    cerr.forEach(function (t) { listaArchivo.appendChild(cardDe(t, true)); });
-  }
+  $('pagPrev').addEventListener('click', function () { revIndex--; pintarRevisar(); });
+  $('pagNext').addEventListener('click', function () { revIndex++; pintarRevisar(); });
+  (function () {
+    var x0 = null;
+    var pagEl = $('pagina');
+    pagEl.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+    pagEl.addEventListener('touchend', function (e) {
+      if (x0 === null) return;
+      var dx = e.changedTouches[0].clientX - x0;
+      x0 = null;
+      if (Math.abs(dx) < 60) return;
+      var lista = listaRevisar();
+      if (dx < 0 && revIndex < lista.length - 1) { revIndex++; pintarRevisar(); }
+      else if (dx > 0 && revIndex > 0) { revIndex--; pintarRevisar(); }
+    }, { passive: true });
+  })();
 
   /* ---------- exportar / importar ---------- */
   function fechaLarga(d) {
