@@ -1,11 +1,12 @@
 /* Suelta — service worker: precache del cascarón, red primero para el HTML. */
-var CACHE = 'suelta-v1';
+var CACHE = 'suelta-v2';
 var ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './fonts/newsreader-normal.woff2',
   './fonts/newsreader-italic.woff2',
+  './fonts/caveat.woff2',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png'
