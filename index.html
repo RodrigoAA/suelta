@@ -590,6 +590,41 @@
       to { opacity: 1; filter: none; }
     }
   }
+  mark.subrayado {
+    background: transparent;
+    color: inherit;
+    text-decoration: underline wavy var(--lamp);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 5px;
+  }
+  .anotaciones {
+    display: block;
+    margin-top: 20px;
+    border-top: 1px dashed var(--lamp);
+    padding-top: 12px;
+  }
+  .anot-bloque { margin-top: 12px; }
+  .anot-bloque:first-child { margin-top: 0; }
+  .anot-etiq {
+    display: block;
+    font-family: var(--ui);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--lamp);
+    margin-bottom: 1px;
+  }
+  .anot-texto {
+    font-family: 'Caveat', cursive;
+    font-weight: 500;
+    font-size: 24px;
+    line-height: 36px;
+    color: var(--lamp);
+    overflow-wrap: break-word;
+  }
+  .anot-bloque.paso .anot-etiq { color: var(--sage); }
+  .anot-bloque.paso .anot-texto { color: var(--sage); }
   .pluma-caret {
     display: inline-block;
     width: 2px;
@@ -814,7 +849,7 @@
     <span id="escEstado">Grabando…</span>
   </div>
   <div class="diario" id="diario">
-    <span class="diario-texto" id="diarioTexto"></span><span class="pluma-caret" aria-hidden="true"></span>
+    <span class="diario-texto" id="diarioTexto"></span><span class="pluma-caret" id="plumaCaret" aria-hidden="true"></span>
   </div>
   <div class="esc-acciones">
     <button class="btn-sec" id="escCancelar">Cancelar</button>
@@ -991,6 +1026,9 @@
     'una decisión grande, un paso de proceso (p. ej. "Apunta los 3 criterios que de verdad importan ' +
     'y ponle una fecha para decidir con lo que haya"); si es puro desahogo sin acción posible, dilo ' +
     'con calidez y sugiere soltarlo. ' +
+    '(4) "subrayados": entre 1 y 3 citas textuales EXACTAS del campo "texto" (copiadas literalmente, ' +
+    'de 3 a 12 palabras cada una) donde más se nota lo que señalas en reflejo y mecanismo. Si no hay ' +
+    'ninguna clara, lista vacía. ' +
     'Reglas: nada de listas dentro de los campos, nada de preguntas al usuario, nada de terapia. ' +
     'Español, tono cercano y directo, tuteando.';
 
@@ -1020,9 +1058,10 @@
                 texto: { type: 'string' },
                 reflejo: { type: 'string' },
                 mecanismo: { type: 'string' },
-                paso: { type: 'string' }
+                paso: { type: 'string' },
+                subrayados: { type: 'array', items: { type: 'string' } }
               },
-              required: ['texto', 'reflejo', 'mecanismo', 'paso'],
+              required: ['texto', 'reflejo', 'mecanismo', 'paso', 'subrayados'],
               additionalProperties: false
             }
           }
@@ -1075,22 +1114,59 @@
     if (plan.paso) bloquePlan(cont, 'Siguiente paso', plan.paso, true);
   }
 
+  function normalizarRespuesta(p, res) {
+    if (res && typeof res === 'object') {
+      var limpio = (res.texto || '').trim();
+      if (limpio) {
+        /* aceptar el texto pasado a limpio solo si es claramente el mismo contenido */
+        var ratio = limpio.length / Math.max(1, p.texto.length);
+        if (ratio > 0.6 && ratio < 1.7) p.texto = limpio;
+      }
+      p.plan = {
+        reflejo: res.reflejo || '',
+        mecanismo: res.mecanismo || '',
+        paso: res.paso || '',
+        subrayados: res.subrayados || []
+      };
+    } else {
+      p.plan = res;
+    }
+  }
+
+  /* texto con las citas del modelo subrayadas */
+  function construirTextoAnotado(cont, textoP, subrayados) {
+    var marcas = [];
+    (subrayados || []).forEach(function (s) {
+      s = String(s).trim();
+      if (!s) return;
+      var i = textoP.toLowerCase().indexOf(s.toLowerCase());
+      if (i >= 0) marcas.push({ ini: i, fin: i + s.length });
+    });
+    marcas.sort(function (a, b) { return a.ini - b.ini; });
+    var fusion = [];
+    marcas.forEach(function (m) {
+      var ult = fusion[fusion.length - 1];
+      if (ult && m.ini <= ult.fin) { if (m.fin > ult.fin) ult.fin = m.fin; }
+      else fusion.push({ ini: m.ini, fin: m.fin });
+    });
+    var pos = 0;
+    fusion.forEach(function (m) {
+      if (m.ini > pos) cont.appendChild(document.createTextNode(textoP.slice(pos, m.ini)));
+      var mk = document.createElement('mark');
+      mk.className = 'subrayado';
+      mk.textContent = textoP.slice(m.ini, m.fin);
+      cont.appendChild(mk);
+      pos = m.fin;
+    });
+    if (pos < textoP.length) cont.appendChild(document.createTextNode(textoP.slice(pos)));
+  }
+
   function pedirPlan(p, tMin) {
     function revela(fn) {
       setTimeout(fn, Math.max(0, (tMin || 0) - Date.now()));
     }
     llamarPlan(p.texto).then(function (res) {
-      if (res && typeof res === 'object') {
-        var limpio = (res.texto || '').trim();
-        if (limpio) {
-          /* aceptar el texto pasado a limpio solo si es claramente el mismo contenido */
-          var ratio = limpio.length / Math.max(1, p.texto.length);
-          if (ratio > 0.6 && ratio < 1.7) p.texto = limpio;
-        }
-        p.plan = { reflejo: res.reflejo || '', mecanismo: res.mecanismo || '', paso: res.paso || '' };
-      } else {
-        p.plan = res;
-      }
+      normalizarRespuesta(p, res);
       persistir();
       revela(function () {
         if (velo.classList.contains('on')) mostrarPlanEnVelo(p.plan);
@@ -1217,6 +1293,16 @@
     palabrasRender = [];
     diarioTexto.innerHTML = '';
     escCancelado = false;
+    faseEscucha = 'grabando';
+    clearInterval(procTimer);
+    var viejoAnot = $('anotaciones');
+    if (viejoAnot) viejoAnot.remove();
+    $('escCancelar').hidden = false;
+    $('escBorrar').hidden = false;
+    var listo = $('escListo');
+    listo.disabled = false;
+    listo.textContent = 'Soltar';
+    plumaCaret.hidden = false;
     escEstado.textContent = 'Grabando…';
     try {
       recActivo = true;
@@ -1232,31 +1318,32 @@
 
   function cerrarEscucha() {
     pararTicker();
+    clearInterval(procTimer);
     escucha.hidden = true;
     btnMic.classList.remove('listening');
     btnMic.setAttribute('aria-pressed', 'false');
     committed = ''; finAct = ''; interimAct = '';
   }
 
+  var faseEscucha = 'grabando';
+  var procTimer = null;
+  var plumaCaret = $('plumaCaret');
+
   function terminarDictado() {
     if (!recActivo) return;
     recActivo = false;
     var total = (committed + ' ' + finAct + ' ' + interimAct).replace(/\s+/g, ' ').trim();
     if (rec) { try { rec.stop(); } catch (e) {} }
-    cerrarEscucha();
-    if (total) {
-      soltarVoz(total);
-    } else {
+    pararTicker();
+    if (!total) {
+      cerrarEscucha();
       toast('No llegó nada de voz.');
       estadoTrasEscucha();
+      return;
     }
-  }
-
-  /* voz: se guarda directo, sin pasar por el texto */
-  function soltarVoz(t) {
     var pensamiento = {
       id: uid(),
-      texto: t,
+      texto: total,
       tema: null,
       plan: null,
       createdAt: new Date().toISOString(),
@@ -1267,9 +1354,91 @@
     persistir();
     pintarBadge();
     mostrarReposo();
-    var conPlan = !!obtenerClave();
-    mostrarVelo(conPlan, true);
-    if (conPlan) pedirPlan(pensamiento, Date.now() + 4200);
+    if (obtenerClave()) {
+      entrarProcesando();
+      pedirPlanDiario(pensamiento);
+    } else {
+      cerrarEscucha();
+      mostrarVelo(false, true);
+    }
+  }
+
+  function entrarProcesando() {
+    faseEscucha = 'procesando';
+    $('escCancelar').hidden = true;
+    $('escBorrar').hidden = true;
+    $('escListo').disabled = true;
+    plumaCaret.hidden = true;
+    var etapas = ['Escuchado.', 'Pensando…', 'Entendiendo lo que hay debajo…', 'Anotando la página…'];
+    var i = 0;
+    escEstado.textContent = etapas[0];
+    clearInterval(procTimer);
+    procTimer = setInterval(function () {
+      i++;
+      if (i < etapas.length) escEstado.textContent = etapas[i];
+      else clearInterval(procTimer);
+    }, 1200);
+  }
+
+  function pedirPlanDiario(p) {
+    var tMin = Date.now() + 4200;
+    llamarPlan(p.texto).then(function (res) {
+      normalizarRespuesta(p, res);
+      persistir();
+      setTimeout(function () {
+        clearInterval(procTimer);
+        if (!escucha.hidden) mostrarResultadoDiario(p);
+        if (!vRevisar.hidden) pintarRevisar();
+      }, Math.max(0, tMin - Date.now()));
+    }).catch(function (err) {
+      var code = err && err.code;
+      var msg = code === 'clave' ? 'La clave de API no es válida. Revísala en el panel de ajustes.'
+        : code === 'limite' ? 'Límite de la API alcanzado. Prueba de nuevo en un rato.'
+        : 'No se pudo pedir el análisis. El pensamiento está guardado igualmente.';
+      setTimeout(function () {
+        clearInterval(procTimer);
+        if (!escucha.hidden) cerrarEscucha();
+        toast(msg);
+        if (!vRevisar.hidden) pintarRevisar();
+      }, 600);
+    });
+  }
+
+  function mostrarResultadoDiario(p) {
+    faseEscucha = 'resultado';
+    escEstado.textContent = 'Anotado.';
+    diarioTexto.innerHTML = '';
+    var subr = (p.plan && typeof p.plan === 'object' && p.plan.subrayados) || [];
+    construirTextoAnotado(diarioTexto, p.texto, subr);
+    var viejo = $('anotaciones');
+    if (viejo) viejo.remove();
+    var anot = document.createElement('div');
+    anot.id = 'anotaciones';
+    anot.className = 'anotaciones';
+    var plan = (p.plan && typeof p.plan === 'object') ? p.plan : { paso: String(p.plan || '') };
+    [
+      ['Lo que hay debajo', plan.reflejo, false],
+      ['Por qué tu cabeza hace esto', plan.mecanismo, false],
+      ['Siguiente paso', plan.paso, true]
+    ].forEach(function (fila) {
+      if (!fila[1]) return;
+      var b = document.createElement('div');
+      b.className = 'anot-bloque' + (fila[2] ? ' paso' : '');
+      var e = document.createElement('span');
+      e.className = 'anot-etiq';
+      e.textContent = fila[0];
+      var tx = document.createElement('div');
+      tx.className = 'anot-texto';
+      tx.textContent = fila[1];
+      b.appendChild(e);
+      b.appendChild(tx);
+      anot.appendChild(b);
+    });
+    diario.appendChild(anot);
+    diario.scrollTop = Math.max(0, anot.offsetTop - 90);
+    var listo = $('escListo');
+    listo.disabled = false;
+    listo.textContent = 'Soltar';
   }
 
   function cancelarDictado() {
@@ -1302,7 +1471,14 @@
   });
   $('btnMicHero').addEventListener('click', empezarDictado);
   $('btnEscribir').addEventListener('click', function () { mostrarPapel(true); });
-  $('escListo').addEventListener('click', terminarDictado);
+  $('escListo').addEventListener('click', function () {
+    if (faseEscucha === 'resultado') {
+      cerrarEscucha();
+      mostrarVelo(false, true);
+    } else {
+      terminarDictado();
+    }
+  });
   $('escCancelar').addEventListener('click', cancelarDictado);
 
   /* ---------- pestañas ---------- */
@@ -1335,7 +1511,9 @@
 
     var p = document.createElement('p');
     p.className = 'ttexto';
-    p.textContent = t.texto;
+    var subr = t.plan && typeof t.plan === 'object' && t.plan.subrayados;
+    if (subr && subr.length) construirTextoAnotado(p, t.texto, subr);
+    else p.textContent = t.texto;
     card.appendChild(p);
 
     if (t.plan) {
