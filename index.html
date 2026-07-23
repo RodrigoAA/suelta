@@ -977,7 +977,10 @@
   var LS_CLAVE = 'suelta.apikey';
   var PROMPT_PLAN = 'Eres parte de Suelta, una app donde el usuario vuelca pensamientos rumiantes ' +
     '(trabajo, carrera, decisiones de vida) para poder soltarlos. Recibirás un pensamiento tal cual ' +
-    'fue volcado, a menudo dictado y sin pulir. Devuelve un análisis breve en tres campos: ' +
+    'fue volcado, a menudo dictado y sin pulir. Devuelve cuatro campos: ' +
+    '(0) "texto": el pensamiento pasado a limpio — añade mayúsculas, comas, puntos y signos de ' +
+    'interrogación y exclamación (con apertura ¿ ¡), y corrige tildes que falten. PROHIBIDO ' +
+    'cambiar, añadir, quitar o reordenar palabras: solo ortografía y puntuación. ' +
     '(1) "reflejo": qué está pensando o sintiendo de verdad el usuario debajo de lo que dice, ' +
     'reformulado con claridad y calidez, máximo 2 frases. ' +
     '(2) "mecanismo": el fundamento psicológico de por qué su cabeza hace esto (p. ej. rumiación ' +
@@ -1014,11 +1017,12 @@
             schema: {
               type: 'object',
               properties: {
+                texto: { type: 'string' },
                 reflejo: { type: 'string' },
                 mecanismo: { type: 'string' },
                 paso: { type: 'string' }
               },
-              required: ['reflejo', 'mecanismo', 'paso'],
+              required: ['texto', 'reflejo', 'mecanismo', 'paso'],
               additionalProperties: false
             }
           }
@@ -1075,11 +1079,21 @@
     function revela(fn) {
       setTimeout(fn, Math.max(0, (tMin || 0) - Date.now()));
     }
-    llamarPlan(p.texto).then(function (plan) {
-      p.plan = plan;
+    llamarPlan(p.texto).then(function (res) {
+      if (res && typeof res === 'object') {
+        var limpio = (res.texto || '').trim();
+        if (limpio) {
+          /* aceptar el texto pasado a limpio solo si es claramente el mismo contenido */
+          var ratio = limpio.length / Math.max(1, p.texto.length);
+          if (ratio > 0.6 && ratio < 1.7) p.texto = limpio;
+        }
+        p.plan = { reflejo: res.reflejo || '', mecanismo: res.mecanismo || '', paso: res.paso || '' };
+      } else {
+        p.plan = res;
+      }
       persistir();
       revela(function () {
-        if (velo.classList.contains('on')) mostrarPlanEnVelo(plan);
+        if (velo.classList.contains('on')) mostrarPlanEnVelo(p.plan);
         if (!vRevisar.hidden) pintarRevisar();
       });
     }).catch(function (err) {
