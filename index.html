@@ -590,6 +590,33 @@
       to { opacity: 1; filter: none; }
     }
   }
+  .diario-fecha {
+    font-family: 'Caveat', cursive;
+    font-size: 20px;
+    line-height: 36px;
+    color: var(--muted);
+    text-align: right;
+  }
+  sup.marca-num {
+    font-family: var(--ui);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--lamp);
+    margin-left: 2px;
+  }
+  .anot-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    font-size: 10px;
+    font-weight: 700;
+    margin-right: 5px;
+    vertical-align: -3px;
+  }
   mark.subrayado {
     background: transparent;
     color: inherit;
@@ -849,6 +876,7 @@
     <span id="escEstado">Grabando…</span>
   </div>
   <div class="diario" id="diario">
+    <div class="diario-fecha" id="diarioFecha"></div>
     <span class="diario-texto" id="diarioTexto"></span><span class="pluma-caret" id="plumaCaret" aria-hidden="true"></span>
   </div>
   <div class="esc-acciones">
@@ -997,7 +1025,7 @@
     clearInterval(etapasTimer);
     veloPeque.textContent = '';
     veloPlan.innerHTML = '';
-    construirPlanDOM(plan, veloPlan);
+    construirPlanDOM(plan, veloPlan, false);
     veloPlan.hidden = false;
     veloToca.hidden = false;
   }
@@ -1026,9 +1054,9 @@
     'una decisión grande, un paso de proceso (p. ej. "Apunta los 3 criterios que de verdad importan ' +
     'y ponle una fecha para decidir con lo que haya"); si es puro desahogo sin acción posible, dilo ' +
     'con calidez y sugiere soltarlo. ' +
-    '(4) "subrayados": entre 1 y 3 citas textuales EXACTAS del campo "texto" (copiadas literalmente, ' +
-    'de 3 a 12 palabras cada una) donde más se nota lo que señalas en reflejo y mecanismo. Si no hay ' +
-    'ninguna clara, lista vacía. ' +
+    '(4) "cita_reflejo": una cita textual EXACTA del campo "texto" (de 3 a 12 palabras, copiada ' +
+    'literalmente) donde más se note lo que señalas en "reflejo"; cadena vacía si no hay ninguna clara. ' +
+    '(5) "cita_mecanismo": igual, pero para "mecanismo"; las dos citas no deben solaparse. ' +
     'Reglas: nada de listas dentro de los campos, nada de preguntas al usuario, nada de terapia. ' +
     'Español, tono cercano y directo, tuteando.';
 
@@ -1057,11 +1085,12 @@
               properties: {
                 texto: { type: 'string' },
                 reflejo: { type: 'string' },
+                cita_reflejo: { type: 'string' },
                 mecanismo: { type: 'string' },
-                paso: { type: 'string' },
-                subrayados: { type: 'array', items: { type: 'string' } }
+                cita_mecanismo: { type: 'string' },
+                paso: { type: 'string' }
               },
-              required: ['texto', 'reflejo', 'mecanismo', 'paso', 'subrayados'],
+              required: ['texto', 'reflejo', 'cita_reflejo', 'mecanismo', 'cita_mecanismo', 'paso'],
               additionalProperties: false
             }
           }
@@ -1091,12 +1120,18 @@
   }
 
   /* renderiza un plan (objeto de 3 partes, o texto legado) en un contenedor */
-  function bloquePlan(cont, etiqueta, textoB, esPaso) {
+  function bloquePlan(cont, etiqueta, textoB, esPaso, num) {
     var b = document.createElement('div');
     b.className = 'vp-bloque' + (esPaso ? ' paso' : '');
     var e = document.createElement('span');
     e.className = 'vp-etiq';
-    e.textContent = etiqueta;
+    if (num) {
+      var n = document.createElement('span');
+      n.className = 'anot-num';
+      n.textContent = num;
+      e.appendChild(n);
+    }
+    e.appendChild(document.createTextNode(etiqueta));
     var tx = document.createElement('div');
     tx.className = 'vp-texto';
     tx.textContent = textoB;
@@ -1104,14 +1139,14 @@
     b.appendChild(tx);
     cont.appendChild(b);
   }
-  function construirPlanDOM(plan, cont) {
+  function construirPlanDOM(plan, cont, conNums) {
     if (typeof plan === 'string') {
-      bloquePlan(cont, 'Siguiente paso', plan, true);
+      bloquePlan(cont, 'Siguiente paso', plan, true, 0);
       return;
     }
-    if (plan.reflejo) bloquePlan(cont, 'Lo que hay debajo', plan.reflejo, false);
-    if (plan.mecanismo) bloquePlan(cont, 'Por qué tu cabeza hace esto', plan.mecanismo, false);
-    if (plan.paso) bloquePlan(cont, 'Siguiente paso', plan.paso, true);
+    if (plan.reflejo) bloquePlan(cont, 'Lo que hay debajo', plan.reflejo, false, conNums && plan.citaReflejo ? 1 : 0);
+    if (plan.mecanismo) bloquePlan(cont, 'Por qué tu cabeza hace esto', plan.mecanismo, false, conNums && plan.citaMecanismo ? 2 : 0);
+    if (plan.paso) bloquePlan(cont, 'Siguiente paso', plan.paso, true, 0);
   }
 
   function normalizarRespuesta(p, res) {
@@ -1126,36 +1161,50 @@
         reflejo: res.reflejo || '',
         mecanismo: res.mecanismo || '',
         paso: res.paso || '',
-        subrayados: res.subrayados || []
+        citaReflejo: res.cita_reflejo || '',
+        citaMecanismo: res.cita_mecanismo || ''
       };
     } else {
       p.plan = res;
     }
   }
 
-  /* texto con las citas del modelo subrayadas */
-  function construirTextoAnotado(cont, textoP, subrayados) {
-    var marcas = [];
-    (subrayados || []).forEach(function (s) {
-      s = String(s).trim();
+  /* citas del plan como marcas numeradas: 1 = reflejo, 2 = mecanismo */
+  function marcasDe(plan) {
+    if (!plan || typeof plan !== 'object') return [];
+    var out = [];
+    if (plan.citaReflejo) out.push({ cita: plan.citaReflejo, num: 1 });
+    if (plan.citaMecanismo) out.push({ cita: plan.citaMecanismo, num: 2 });
+    if (!out.length && plan.subrayados) {
+      plan.subrayados.forEach(function (s) { out.push({ cita: s, num: 0 }); });
+    }
+    return out;
+  }
+
+  /* texto con las citas del modelo subrayadas y numeradas */
+  function construirTextoAnotado(cont, textoP, marcas) {
+    var encontradas = [];
+    (marcas || []).forEach(function (m) {
+      var s = String(m.cita || '').trim();
       if (!s) return;
       var i = textoP.toLowerCase().indexOf(s.toLowerCase());
-      if (i >= 0) marcas.push({ ini: i, fin: i + s.length });
+      if (i >= 0) encontradas.push({ ini: i, fin: i + s.length, num: m.num });
     });
-    marcas.sort(function (a, b) { return a.ini - b.ini; });
-    var fusion = [];
-    marcas.forEach(function (m) {
-      var ult = fusion[fusion.length - 1];
-      if (ult && m.ini <= ult.fin) { if (m.fin > ult.fin) ult.fin = m.fin; }
-      else fusion.push({ ini: m.ini, fin: m.fin });
-    });
+    encontradas.sort(function (a, b) { return a.ini - b.ini; });
     var pos = 0;
-    fusion.forEach(function (m) {
+    encontradas.forEach(function (m) {
+      if (m.ini < pos) return; /* solapada con la anterior: se omite */
       if (m.ini > pos) cont.appendChild(document.createTextNode(textoP.slice(pos, m.ini)));
       var mk = document.createElement('mark');
       mk.className = 'subrayado';
       mk.textContent = textoP.slice(m.ini, m.fin);
       cont.appendChild(mk);
+      if (m.num) {
+        var sup = document.createElement('sup');
+        sup.className = 'marca-num';
+        sup.textContent = m.num;
+        cont.appendChild(sup);
+      }
       pos = m.fin;
     });
     if (pos < textoP.length) cont.appendChild(document.createTextNode(textoP.slice(pos)));
@@ -1293,6 +1342,10 @@
     palabrasRender = [];
     diarioTexto.innerHTML = '';
     escCancelado = false;
+    var ahora = new Date();
+    var p2 = function (n) { return ('0' + n).slice(-2); };
+    $('diarioFecha').textContent = p2(ahora.getDate()) + '/' + p2(ahora.getMonth() + 1) + '/' + ahora.getFullYear() +
+      ' — ' + p2(ahora.getHours()) + ':' + p2(ahora.getMinutes());
     faseEscucha = 'grabando';
     clearInterval(procTimer);
     var viejoAnot = $('anotaciones');
@@ -1408,8 +1461,7 @@
     faseEscucha = 'resultado';
     escEstado.textContent = 'Anotado.';
     diarioTexto.innerHTML = '';
-    var subr = (p.plan && typeof p.plan === 'object' && p.plan.subrayados) || [];
-    construirTextoAnotado(diarioTexto, p.texto, subr);
+    construirTextoAnotado(diarioTexto, p.texto, marcasDe(p.plan));
     var viejo = $('anotaciones');
     if (viejo) viejo.remove();
     var anot = document.createElement('div');
@@ -1417,16 +1469,22 @@
     anot.className = 'anotaciones';
     var plan = (p.plan && typeof p.plan === 'object') ? p.plan : { paso: String(p.plan || '') };
     [
-      ['Lo que hay debajo', plan.reflejo, false],
-      ['Por qué tu cabeza hace esto', plan.mecanismo, false],
-      ['Siguiente paso', plan.paso, true]
+      ['Lo que hay debajo', plan.reflejo, false, plan.citaReflejo ? 1 : 0],
+      ['Por qué tu cabeza hace esto', plan.mecanismo, false, plan.citaMecanismo ? 2 : 0],
+      ['Siguiente paso', plan.paso, true, 0]
     ].forEach(function (fila) {
       if (!fila[1]) return;
       var b = document.createElement('div');
       b.className = 'anot-bloque' + (fila[2] ? ' paso' : '');
       var e = document.createElement('span');
       e.className = 'anot-etiq';
-      e.textContent = fila[0];
+      if (fila[3]) {
+        var n = document.createElement('span');
+        n.className = 'anot-num';
+        n.textContent = fila[3];
+        e.appendChild(n);
+      }
+      e.appendChild(document.createTextNode(fila[0]));
       var tx = document.createElement('div');
       tx.className = 'anot-texto';
       tx.textContent = fila[1];
@@ -1511,15 +1569,15 @@
 
     var p = document.createElement('p');
     p.className = 'ttexto';
-    var subr = t.plan && typeof t.plan === 'object' && t.plan.subrayados;
-    if (subr && subr.length) construirTextoAnotado(p, t.texto, subr);
+    var marcas = marcasDe(t.plan);
+    if (marcas.length) construirTextoAnotado(p, t.texto, marcas);
     else p.textContent = t.texto;
     card.appendChild(p);
 
     if (t.plan) {
       var planDiv = document.createElement('div');
       planDiv.className = 'plan';
-      construirPlanDOM(t.plan, planDiv);
+      construirPlanDOM(t.plan, planDiv, true);
       card.appendChild(planDiv);
     }
 
