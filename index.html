@@ -167,6 +167,49 @@
   main { flex: 1; display: flex; flex-direction: column; }
   main[hidden] { display: none; }
 
+  /* ---------- volcar: reposo (landing de voz) ---------- */
+  .reposo {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding-bottom: 8vh;
+  }
+  .reposo[hidden] { display: none; }
+  .mic-hero {
+    appearance: none;
+    cursor: pointer;
+    width: 128px;
+    height: 128px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--lamp);
+    border: 1.5px solid var(--lamp);
+    background: var(--lamp-soft);
+  }
+  .mic-hero svg { width: 50px; height: 50px; }
+  .mic-hero:active { transform: scale(0.97); }
+  @media (prefers-reduced-motion: no-preference) {
+    .mic-hero { animation: respira 3.2s ease-in-out infinite; }
+  }
+  .reposo-pista { color: var(--faint); font-size: 13px; margin: 4px 0 0; text-align: center; }
+  .enlace-escribir {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13.5px;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 6px;
+    margin-top: 10px;
+  }
+  .papel[hidden] { display: none; }
+
   /* ---------- volcar ---------- */
   .prompt {
     font-family: var(--serif);
@@ -586,7 +629,18 @@
       pestaña esté abierta. Exporta antes de cerrar.
     </div>
     <p class="prompt">¿Qué te está dando vueltas?</p>
-    <div class="papel">
+    <div class="reposo" id="reposo">
+      <button class="mic-hero" id="btnMicHero" aria-label="Tocar para dictar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+          <path d="M5 11a7 7 0 0 0 14 0"></path>
+          <line x1="12" y1="18" x2="12" y2="21"></line>
+        </svg>
+      </button>
+      <p class="reposo-pista">Toca y habla. El texto no se muestra mientras hablas.</p>
+      <button class="enlace-escribir" id="btnEscribir">Prefiero escribirlo</button>
+    </div>
+    <div class="papel" id="papel" hidden>
       <textarea id="texto" rows="6" placeholder="Escríbelo tal y como suena en tu cabeza. Sin ordenar, sin filtrar." aria-label="Pensamiento"></textarea>
       <div class="papel-pie">
         <button class="btn-mic" id="btnMic" aria-label="Dictar por voz" aria-pressed="false" title="Dictar por voz">
@@ -746,6 +800,7 @@
     texto.blur();
     pintarBadge();
     mostrarVelo();
+    if (window.SpeechRecognition || window.webkitSpeechRecognition) mostrarReposo();
   }
   btnSoltar.addEventListener('click', soltar);
 
@@ -767,8 +822,22 @@
   var rec = null, recActivo = false, escCancelado = false;
   var committed = '', finAct = '', interimAct = '';
   var escucha = $('escucha'), escEstado = $('escEstado'), escPalabras = $('escPalabras'), escOnda = $('escOnda');
+  var reposo = $('reposo'), papel = $('papel');
   if (!SR) {
     btnMic.style.display = 'none';
+  }
+
+  function mostrarReposo() {
+    papel.hidden = true;
+    reposo.hidden = false;
+  }
+  function mostrarPapel(enfocar) {
+    reposo.hidden = true;
+    papel.hidden = false;
+    if (enfocar) texto.focus();
+  }
+  function estadoTrasEscucha() {
+    if (texto.value.trim()) mostrarPapel(false); else mostrarReposo();
   }
 
   function cuentaPalabras(s) {
@@ -853,8 +922,10 @@
     if (rec) { try { rec.stop(); } catch (e) {} }
     if (total) {
       texto.value = texto.value ? texto.value.replace(/\s+$/, '') + ' ' + total : total;
+      mostrarPapel(false);
     } else {
       toast('No llegó nada de voz.');
+      estadoTrasEscucha();
     }
     cerrarEscucha();
   }
@@ -864,11 +935,14 @@
     recActivo = false;
     if (rec) { try { rec.stop(); } catch (e) {} }
     cerrarEscucha();
+    estadoTrasEscucha();
   }
 
   btnMic.addEventListener('click', function () {
     if (recActivo) terminarDictado(); else empezarDictado();
   });
+  $('btnMicHero').addEventListener('click', empezarDictado);
+  $('btnEscribir').addEventListener('click', function () { mostrarPapel(true); });
   $('escListo').addEventListener('click', terminarDictado);
   $('escCancelar').addEventListener('click', cancelarDictado);
 
@@ -1128,6 +1202,7 @@
   /* ---------- arranque ---------- */
   cargar();
   pintarBadge();
+  if (SR) mostrarReposo(); else mostrarPapel(false);
 })();
 </script>
 </body>
